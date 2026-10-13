@@ -3,6 +3,11 @@ plugins {
 }
 
 android {
+    sourceSets {
+    main {
+        manifest.srcFile 'src/main/AndroidManifest.xml'
+    }
+    }
     namespace 'com.example.floatingpet'
     compileSdk 35
 
