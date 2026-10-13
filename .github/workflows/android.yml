@@ -13,6 +13,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Debug file list
+        run: |
+          echo "=== app ==="
+          ls -la app/
+          echo "=== app/src ==="
+          ls -la app/src/
+          echo "=== app/src/main ==="
+          ls -la app/src/main/
+          echo "=== find manifest ==="
+          find . -iname "*manifest*" -not -path "./.git/*"
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
