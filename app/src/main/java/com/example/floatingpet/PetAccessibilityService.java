@@ -1,10 +1,11 @@
+
 package com.example.floatingpet;
 
 import android.accessibilityservice.AccessibilityService;
 import android.view.accessibility.AccessibilityEvent;
-import android.content.*;
 import android.app.KeyguardManager;
 import android.os.PowerManager;
+import android.content.*;
 import android.graphics.PixelFormat;
 import android.view.*;
 import android.widget.ImageView;
@@ -25,21 +26,7 @@ public class PetAccessibilityService extends AccessibilityService {
     private int index = 0;
     private Runnable reset;
 
-    private final Runnable visibilityChecker = new Runnable() {
-        @Override
-        public void run() {
-            updatePetVisibility();
-            handler.postDelayed(this, 500);
-        }
-    };
-
-    @Override
-    public void onServiceConnected() {
-        super.onServiceConnected();
-        instance = this;
-        showPet();
-        handler.post(visibilityChecker);
-    }
+    private boolean receiverRegistered = false;
 
     private SharedPreferences prefs() {
         return getSharedPreferences("pet", MODE_PRIVATE);
@@ -51,41 +38,95 @@ public class PetAccessibilityService extends AccessibilityService {
         );
     }
 
-    // 화면 및 잠금 상태 확인
+    // 화면이 켜져 있고 잠금이 해제된 경우만 표시
     private boolean shouldShowPet() {
 
-        KeyguardManager km =
-            (KeyguardManager) getSystemService(
-                KEYGUARD_SERVICE
-            );
-
         PowerManager pm =
-            (PowerManager) getSystemService(
-                POWER_SERVICE
-            );
+            (PowerManager) getSystemService(POWER_SERVICE);
 
-        boolean screenActive =
+        KeyguardManager km =
+            (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
+
+        boolean screenOn =
             pm != null && pm.isInteractive();
 
         boolean unlocked =
             km != null && !km.isKeyguardLocked();
 
-        boolean enabled =
+        boolean visible =
             prefs().getBoolean("visible", true);
 
-        return screenActive && unlocked && enabled;
+        return screenOn && unlocked && visible;
     }
 
-    // 펫 표시 상태 갱신
     private void updatePetVisibility() {
+
         if (pet == null) return;
 
-        int visibility =
-            shouldShowPet() ? View.VISIBLE : View.GONE;
+        int visibility = shouldShowPet()
+            ? View.VISIBLE
+            : View.GONE;
 
         if (pet.getVisibility() != visibility) {
             pet.setVisibility(visibility);
         }
+    }
+
+    // 화면 상태 변경 시에만 실행
+    private final BroadcastReceiver screenReceiver =
+        new BroadcastReceiver() {
+
+            @Override
+            public void onReceive(
+                Context context,
+                Intent intent
+            ) {
+
+                String action = intent.getAction();
+
+                if (action == null) return;
+
+                switch (action) {
+
+                    case Intent.ACTION_SCREEN_OFF:
+                        // 화면이 꺼지면 즉시 숨김
+                        if (pet != null) {
+                            pet.setVisibility(View.GONE);
+                        }
+                        break;
+
+                    case Intent.ACTION_SCREEN_ON:
+                        // 화면이 켜져도 잠겨 있으면 숨김
+                        updatePetVisibility();
+                        break;
+
+                    case Intent.ACTION_USER_PRESENT:
+                        // 잠금 해제 후 다시 표시
+                        updatePetVisibility();
+                        break;
+                }
+            }
+        };
+
+    @Override
+    public void onServiceConnected() {
+
+        super.onServiceConnected();
+
+        instance = this;
+
+        showPet();
+
+        IntentFilter filter = new IntentFilter();
+
+        filter.addAction(Intent.ACTION_SCREEN_OFF);
+        filter.addAction(Intent.ACTION_SCREEN_ON);
+        filter.addAction(Intent.ACTION_USER_PRESENT);
+
+        registerReceiver(screenReceiver, filter);
+        receiverRegistered = true;
+
+        updatePetVisibility();
     }
 
     void showPet() {
@@ -96,7 +137,9 @@ public class PetAccessibilityService extends AccessibilityService {
             getSystemService(WINDOW_SERVICE);
 
         pet = new ImageView(this);
+
         pet.setImageResource(R.drawable.idle);
+
         pet.setScaleType(
             ImageView.ScaleType.FIT_CENTER
         );
@@ -111,6 +154,7 @@ public class PetAccessibilityService extends AccessibilityService {
         );
 
         lp.gravity = Gravity.TOP | Gravity.START;
+
         lp.x = prefs().getInt("x", 50);
         lp.y = prefs().getInt("y", 250);
 
@@ -243,7 +287,10 @@ public class PetAccessibilityService extends AccessibilityService {
     @Override
     public void onDestroy() {
 
-        handler.removeCallbacks(visibilityChecker);
+        if (receiverRegistered) {
+            unregisterReceiver(screenReceiver);
+            receiverRegistered = false;
+        }
 
         if (reset != null) {
             handler.removeCallbacks(reset);
