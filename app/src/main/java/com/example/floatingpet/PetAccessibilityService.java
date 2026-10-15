@@ -1,4 +1,3 @@
-
 package com.example.floatingpet;
 
 import android.accessibilityservice.AccessibilityService;
@@ -30,6 +29,7 @@ public class PetAccessibilityService extends AccessibilityService {
         new Handler(Looper.getMainLooper());
 
     private int index = 0;
+    private int currentSlot = 0;
     private Runnable reset;
 
     private boolean receiverRegistered = false;
@@ -143,7 +143,6 @@ public class PetAccessibilityService extends AccessibilityService {
                     String titleText =
                         title == null ? "" : title.toString();
 
-                    // PIP 창은 작은 앱 창으로 나타날 수 있음
                     Rect bounds = new Rect();
                     window.getBoundsInScreen(bounds);
 
@@ -163,9 +162,8 @@ public class PetAccessibilityService extends AccessibilityService {
                             AccessibilityWindowInfo.TYPE_APPLICATION;
 
                     if (pipCandidate) {
-                        // 작은 앱 창만으로 영상 PIP임을
-                        // 확정할 수 없으므로 여기서는
-                        // 자동으로 숨기지 않음
+                        // 작은 앱 창만으로 영상 PIP인지
+                        // 확정할 수 없어 자동으로 숨기지 않음
                     }
 
                     if (window.isActive()) {
@@ -197,8 +195,6 @@ public class PetAccessibilityService extends AccessibilityService {
             }
 
         } catch (Exception ignored) {
-            // 접근성 창 정보를 가져올 수 없는 경우
-            // 기존 상태 유지
             return;
         }
 
@@ -281,7 +277,7 @@ public class PetAccessibilityService extends AccessibilityService {
 
         pet = new ImageView(this);
 
-        pet.setImageResource(R.drawable.idle);
+        PetImages.apply(this, pet, 0);
 
         pet.setScaleType(
             ImageView.ScaleType.FIT_CENTER
@@ -378,6 +374,7 @@ public class PetAccessibilityService extends AccessibilityService {
             prefs().getBoolean("flip", false) ? -1f : 1f
         );
 
+        PetImages.apply(this, pet, currentSlot);
         updatePetVisibility();
 
         wm.updateViewLayout(pet, lp);
@@ -411,11 +408,8 @@ public class PetAccessibilityService extends AccessibilityService {
 
         index++;
 
-        pet.setImageResource(
-            index % 2 == 0
-                ? R.drawable.left
-                : R.drawable.right
-        );
+        currentSlot = index % 2 == 0 ? 1 : 2;
+        PetImages.apply(this, pet, currentSlot);
 
         if (reset != null) {
             handler.removeCallbacks(reset);
@@ -423,7 +417,8 @@ public class PetAccessibilityService extends AccessibilityService {
 
         reset = () -> {
             if (pet != null) {
-                pet.setImageResource(R.drawable.idle);
+                currentSlot = 0;
+                PetImages.apply(this, pet, 0);
             }
         };
 
